@@ -295,6 +295,7 @@ def main():
     )
     
     st.title('Gerador de Minutas Personalizadas')
+    st.error('Colocar o texto para modificação na minuta modelo entre colchetes. Exemplo: "[PAULO ROBERTO]"')
     
     if 'caminho_minuta' not in st.session_state:
         st.session_state.caminho_minuta = None
