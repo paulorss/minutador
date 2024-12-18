@@ -9,6 +9,17 @@ class GeradorMinutas:
     def __init__(self):
         # Usa caminho relativo para a pasta modelos
         self.PASTA_MODELOS = os.path.join(os.path.dirname(__file__), 'modelos')
+        self.PASTA_UPLOADS = os.path.join(os.path.dirname(__file__), 'uploads')
+        os.makedirs(self.PASTA_UPLOADS, exist_ok=True)
+
+    def salvar_upload(self, arquivo_upload):
+        """
+        Salva o arquivo enviado e retorna o caminho
+        """
+        caminho_arquivo = os.path.join(self.PASTA_UPLOADS, arquivo_upload.name)
+        with open(caminho_arquivo, "wb") as f:
+            f.write(arquivo_upload.getbuffer())
+        return caminho_arquivo
         
     def extrair_campos_e_texto(self, caminho_documento):
         """
@@ -221,6 +232,60 @@ class GeradorMinutas:
             st.error(f"Erro ao copiar formatação: {e}")
             pass
 
+def processar_documento(gerador, caminho_documento, form_key):
+    """
+    Função auxiliar para processar o documento e mostrar interface
+    """
+    resultado = gerador.extrair_campos_e_texto(caminho_documento)
+    
+    # Layout em duas colunas
+    col1, col2 = st.columns([2, 1])
+    
+    # Texto do modelo (esquerda)
+    with col1:
+        st.subheader('Modelo de Minuta')
+        st.markdown(
+            resultado['texto_original'],
+            unsafe_allow_html=True
+        )
+    
+    # Campos para preenchimento e botões (direita)
+    with col2:
+        st.subheader('Preencha os Campos')
+        
+        with st.form(key=form_key):  # Usa a chave única passada como parâmetro
+            # Campos dinâmicos com valores padrão vazios
+            dados_campos = {}
+            for campo in resultado['campos']:
+                # Remove os colchetes para exibição
+                campo_limpo = campo.strip()
+                dados_campos[campo_limpo] = st.text_input(
+                    f'Campo: {campo_limpo}',
+                    key=f'{form_key}_{campo_limpo}'  # Chave única para cada campo
+                )
+            
+            submit = st.form_submit_button('Gerar Nova Minuta')
+            
+            if submit:
+                if all(dados_campos.values()):
+                    st.session_state.caminho_minuta = gerador.gerar_nova_minuta(
+                        caminho_documento,
+                        dados_campos
+                    )
+                    st.success('Minuta gerada com sucesso!')
+                else:
+                    st.warning('Preencha todos os campos')
+        
+        # Botão de download
+        if st.session_state.caminho_minuta:
+            with open(st.session_state.caminho_minuta, 'rb') as f:
+                st.download_button(
+                    label='Baixar Minuta Modificada',
+                    data=f.read(),
+                    file_name=os.path.basename(st.session_state.caminho_minuta),
+                    mime='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                )
+
 def main():
     st.set_page_config(
         page_title="Gerador de Minutas",
@@ -233,82 +298,55 @@ def main():
     if 'caminho_minuta' not in st.session_state:
         st.session_state.caminho_minuta = None
     
-    # Inicializa o gerador com caminho relativo
+    # Inicializa o gerador
     gerador = GeradorMinutas()
     
-    # Lista documentos da pasta modelos
-    try:
-        documentos = [
-            f for f in os.listdir(gerador.PASTA_MODELOS) 
-            if f.endswith('.docx') and not f.startswith('~$')
-        ]
-    except Exception as e:
-        st.error(f"Erro ao listar modelos: {e}")
-        documentos = []
+    # Abas para escolher entre modelo pré-definido ou upload
+    tab1, tab2 = st.tabs(["Modelos Pré-definidos", "Upload de Minuta"])
     
-    if not documentos:
-        st.warning("Nenhum modelo encontrado na pasta 'modelos'. Adicione arquivos .docx à pasta.")
-        return
-    
-    # Seleção do documento
-    documento_selecionado = st.selectbox(
-        'Escolha um modelo de minuta', 
-        documentos
-    )
-    
-    if documento_selecionado:
-        caminho_documento = os.path.join(gerador.PASTA_MODELOS, documento_selecionado)
-        resultado = gerador.extrair_campos_e_texto(caminho_documento)
+    with tab1:
+        # Lista documentos da pasta modelos
+        try:
+            documentos = [
+                f for f in os.listdir(gerador.PASTA_MODELOS) 
+                if f.endswith('.docx') and not f.startswith('~$')
+            ]
+        except Exception as e:
+            st.error(f"Erro ao listar modelos: {e}")
+            documentos = []
         
-        # Layout em duas colunas
-        col1, col2 = st.columns([2, 1])
+        if not documentos:
+            st.warning("Nenhum modelo encontrado na pasta 'modelos'. Adicione arquivos .docx à pasta.")
+            return
         
-        # Texto do modelo (esquerda)
-        with col1:
-            st.subheader('Modelo de Minuta')
-            st.markdown(
-                resultado['texto_original'],
-                unsafe_allow_html=True
-            )
+        # Seleção do documento
+        documento_selecionado = st.selectbox(
+            'Escolha um modelo de minuta', 
+            documentos
+        )
         
-        # Campos para preenchimento e botões (direita)
-        with col2:
-            st.subheader('Preencha os Campos')
-            
-            with st.form('gerar_minuta'):
-                # Campos dinâmicos com valores padrão vazios
-                dados_campos = {}
-                for campo in resultado['campos']:
-                    # Remove os colchetes para exibição
-                    campo_limpo = campo.strip()
-                    dados_campos[campo_limpo] = st.text_input(
-                        f'Campo: {campo_limpo}',
-                        key=f'campo_{campo_limpo}'
-                    )
-                
-                submit = st.form_submit_button('Gerar Nova Minuta')
-                
-                if submit:
-                    if all(dados_campos.values()):
-                        st.session_state.caminho_minuta = gerador.gerar_nova_minuta(
-                            caminho_documento,
-                            dados_campos
-                        )
-                        st.success('Minuta gerada com sucesso!')
-                    else:
-                        st.warning('Preencha todos os campos')
-            
-            # Botão de download
-            if st.session_state.caminho_minuta:
-                with open(st.session_state.caminho_minuta, 'rb') as f:
-                    st.download_button(
-                        label='Baixar Minuta Modificada',
-                        data=f.read(),
-                        file_name=os.path.basename(st.session_state.caminho_minuta),
-                        mime='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                    )
-                    
-    
+        if documento_selecionado:
+            caminho_documento = os.path.join(gerador.PASTA_MODELOS, documento_selecionado)
+            processar_documento(gerador, caminho_documento, form_key='modelo_predefinido')  # Chave única para o formulário
+
+    with tab2:
+        st.subheader("Upload de Minuta Personalizada")
+        arquivo_upload = st.file_uploader("Escolha um arquivo .docx", type=['docx'])
+        
+        if arquivo_upload is not None:
+            # Salva o arquivo enviado
+            try:
+                caminho_upload = gerador.salvar_upload(arquivo_upload)
+                processar_documento(gerador, caminho_upload, form_key='upload_personalizado')  # Chave única para o formulário
+            except Exception as e:
+                st.error(f"Erro ao processar arquivo: {e}")
+            finally:
+                # Limpa arquivos de upload após processamento
+                if os.path.exists(caminho_upload):
+                    try:
+                        os.remove(caminho_upload)
+                    except:
+                        pass
 
 if __name__ == '__main__':
     main()
