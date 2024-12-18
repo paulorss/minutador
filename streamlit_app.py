@@ -253,7 +253,7 @@ def processar_documento(gerador, caminho_documento, form_key):
     with col2:
         st.subheader('Preencha os Campos')
         
-        with st.form(key=form_key):  # Usa a chave única passada como parâmetro
+        with st.form(key=form_key):
             # Campos dinâmicos com valores padrão vazios
             dados_campos = {}
             for campo in resultado['campos']:
@@ -261,7 +261,7 @@ def processar_documento(gerador, caminho_documento, form_key):
                 campo_limpo = campo.strip()
                 dados_campos[campo_limpo] = st.text_input(
                     f'Campo: {campo_limpo}',
-                    key=f'{form_key}_{campo_limpo}'  # Chave única para cada campo
+                    key=f'{form_key}_{campo_limpo}'
                 )
             
             submit = st.form_submit_button('Gerar Nova Minuta')
@@ -276,14 +276,15 @@ def processar_documento(gerador, caminho_documento, form_key):
                 else:
                     st.warning('Preencha todos os campos')
         
-        # Botão de download
+        # Botão de download com chave única
         if st.session_state.caminho_minuta:
             with open(st.session_state.caminho_minuta, 'rb') as f:
                 st.download_button(
                     label='Baixar Minuta Modificada',
                     data=f.read(),
                     file_name=os.path.basename(st.session_state.caminho_minuta),
-                    mime='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                    mime='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    key=f'download_{form_key}'  # Chave única para o botão de download
                 )
 
 def main():
